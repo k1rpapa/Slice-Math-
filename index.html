@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Slice Math - 3D Rush (v2.5)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Slice Math - 3D Rush (v2.11)</title>
 <style>
   :root {
     --bg-color: #e0f0ff;
@@ -23,20 +23,45 @@
     font-family: 'Hiragino Rounded W8 ProN', 'Hiragino Maru Gothic ProN', sans-serif;
     background-color: var(--bg-color);
     overflow: hidden;
+    display: flex; flex-direction: column;
+    height: 100dvh; 
   }
 
   #world {
-    perspective: 800px;
-    width: 100vw; height: 100vh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
+    flex: 7; 
+    width: 100vw;
     position: relative;
     overflow: hidden;
   }
 
+  .layer-3d {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    perspective: 800px; 
+    pointer-events: none; 
+  }
+
+  #tenkey-container {
+    flex: 3; 
+    background: #ffffff;
+    border-top: 3px solid #b5d3ed;
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(4, 1fr); 
+    gap: 8px; 
+    padding: 10px 15px calc(10px + env(safe-area-inset-bottom)) 15px; 
+    z-index: 200; 
+    opacity: 0.4; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  #tenkey-container.active { 
+    opacity: 1; pointer-events: auto; 
+  }
+
   #floor {
     position: absolute;
-    top: 55vh; left: -50vw;
+    top: 50%; left: -50vw;
     width: 200vw; height: 150vh;
     background: repeating-linear-gradient(
       to bottom,
@@ -46,7 +71,6 @@
     transform: rotateX(75deg);
     transform-origin: top center;
     animation: rushForward 0.6s linear infinite;
-    z-index: 1;
     mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
   }
@@ -57,22 +81,24 @@
   }
 
   #ui-layer {
-    position: absolute; top: 20px; left: 20px; z-index: 50;
-    font-size: 1.5rem; font-weight: bold; color: var(--text-color);
+    position: absolute; top: 15px; left: 15px; z-index: 50;
+    font-size: 1.2rem; font-weight: bold; color: var(--text-color);
   }
-  #combo { color: #ff8c00; font-size: 2rem; margin-top: 5px; opacity: 0; transition: opacity 0.2s;}
+  #combo { color: #ff8c00; font-size: 1.8rem; margin-top: 5px; opacity: 0; transition: opacity 0.2s;}
 
   #stage-container {
     display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-    width: 100%; height: 75vh; z-index: 10;
+    width: 100%; height: 100%; 
+    padding-bottom: 25px; 
     transform: translateZ(0px); 
     filter: drop-shadow(0px 30px 20px rgba(0,0,0,0.15));
-    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
   #play-area {
     display: flex; justify-content: center; align-items: flex-end;
-    gap: 30px; margin-bottom: 40px; position: relative;
+    gap: 50px; 
+    margin-bottom: 30px; 
+    position: relative;
   }
 
   .block-group { display: flex; flex-direction: column; align-items: center; position: relative; }
@@ -87,6 +113,29 @@
     position: relative; z-index: 2;
   }
 
+  /* ★修正：目盛りを絶対座標（下端固定）の独立レイヤーとして定義 */
+  .ruler-container {
+    position: absolute;
+    bottom: 0; left: -20px;
+    width: 20px; height: auto; /* ブロックの高さに合わせて下から上に伸びる */
+    pointer-events: none;
+    display: flex; flex-direction: column; align-items: flex-end;
+    z-index: 5; transition: opacity 0.3s ease;
+  }
+  .ruler-segment {
+    width: 20px; height: 30px; margin-bottom: -4px; position: relative;
+  }
+  .ruler-segment.mark::after {
+    content: ''; position: absolute;
+    right: -5px; top: -2px; width: 20px;
+    border-top: 3px solid #88aadd; border-radius: 2px;
+  }
+  .ruler-segment.mark::before {
+    content: attr(data-level); position: absolute;
+    right: 20px; top: -12px;
+    color: #88aadd; font-size: 1.2rem; font-weight: bold;
+  }
+
   .group-label {
     position: absolute; bottom: 15px; left: 50%;
     transform: translate(-50%, 50%);
@@ -97,10 +146,10 @@
   }
 
   #equation-area {
-    font-size: 4rem; font-weight: bold; color: var(--text-color);
-    background: rgba(255,255,255,0.9); padding: 10px 40px; border-radius: 20px;
-    box-shadow: 0 6px 15px rgba(0,0,0,0.1); margin-bottom: 20px;
-    transition: transform 0.3s;
+    font-size: 3.5rem; font-weight: bold; color: var(--text-color);
+    background: rgba(255,255,255,0.95); 
+    padding: 8px 30px; border-radius: 20px;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1); 
   }
 
   .sync-text { color: var(--sync-text-color); animation: syncPulseText 0.8s infinite alternate; }
@@ -134,71 +183,59 @@
     to { filter: drop-shadow(0 0 12px rgba(255, 77, 77, 1)) brightness(1.3); }
   }
 
-  /* ★ キャンバスレイヤー */
-  #swipe-canvas {
-    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-    z-index: 100; pointer-events: auto;
+  #swipe-canvas, #particle-canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
   }
-  #particle-canvas {
-    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-    z-index: 150; pointer-events: none; /* タッチを阻害しない */
-  }
-
-  /* ★ テンキーコンテナ */
-  #tenkey-container {
-    position: absolute; bottom: -50vh; left: 0; width: 100vw; height: 42vh;
-    background: #ffffff;
-    border-top-left-radius: 30px; border-top-right-radius: 30px;
-    box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
-    transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* ポップに出現 */
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 12px; padding: 25px; z-index: 200; box-sizing: border-box;
-  }
-  #tenkey-container.active { bottom: 0; }
+  #swipe-canvas { z-index: 100; pointer-events: auto; }
+  #particle-canvas { z-index: 150; pointer-events: none; }
   
   .key {
-    background: #f0f8ff; border: 2px solid #b5d3ed; border-radius: 20px;
-    font-size: 2.8rem; font-weight: bold; color: #333;
+    background: #f0f8ff; border: 2px solid #b5d3ed; border-radius: 12px;
+    font-size: 2.2rem; font-weight: bold; color: #333;
     display: flex; justify-content: center; align-items: center;
-    box-shadow: 0 6px 0 #b5d3ed; transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 0 4px 0 #b5d3ed; transition: transform 0.1s, box-shadow 0.1s;
     cursor: pointer; user-select: none;
   }
-  .key:active { transform: translateY(6px); box-shadow: 0 0 0 #b5d3ed; }
+  .key:active { transform: translateY(4px); box-shadow: 0 0 0 #b5d3ed; }
   .key-empty { pointer-events: none; }
 </style>
 </head>
 <body>
 
 <div id="world">
-  <div id="floor"></div>
+  <div class="layer-3d" style="z-index: 1;">
+    <div id="floor"></div>
+  </div>
+
+  <div class="layer-3d" style="z-index: 10;">
+    <div id="stage-container">
+      <div id="play-area"></div>
+      <div id="equation-area"></div>
+    </div>
+  </div>
 
   <div id="ui-layer">
     <div>SCORE: <span id="score-val">0</span></div>
     <div id="combo">COMBO!</div>
   </div>
 
-  <div id="stage-container">
-    <div id="play-area"></div>
-    <div id="equation-area"></div>
-  </div>
-
   <canvas id="swipe-canvas"></canvas>
   <canvas id="particle-canvas"></canvas>
+</div>
 
-  <div id="tenkey-container">
-    <div class="key" onpointerdown="handleKey(event, 1)">1</div>
-    <div class="key" onpointerdown="handleKey(event, 2)">2</div>
-    <div class="key" onpointerdown="handleKey(event, 3)">3</div>
-    <div class="key" onpointerdown="handleKey(event, 4)">4</div>
-    <div class="key" onpointerdown="handleKey(event, 5)">5</div>
-    <div class="key" onpointerdown="handleKey(event, 6)">6</div>
-    <div class="key" onpointerdown="handleKey(event, 7)">7</div>
-    <div class="key" onpointerdown="handleKey(event, 8)">8</div>
-    <div class="key" onpointerdown="handleKey(event, 9)">9</div>
-    <div class="key-empty"></div>
-    <div class="key" onpointerdown="handleKey(event, 0)">0</div>
-    <div class="key-empty"></div>
-  </div>
+<div id="tenkey-container">
+  <div class="key" onpointerdown="handleKey(event, 1)">1</div>
+  <div class="key" onpointerdown="handleKey(event, 2)">2</div>
+  <div class="key" onpointerdown="handleKey(event, 3)">3</div>
+  <div class="key" onpointerdown="handleKey(event, 4)">4</div>
+  <div class="key" onpointerdown="handleKey(event, 5)">5</div>
+  <div class="key" onpointerdown="handleKey(event, 6)">6</div>
+  <div class="key" onpointerdown="handleKey(event, 7)">7</div>
+  <div class="key" onpointerdown="handleKey(event, 8)">8</div>
+  <div class="key" onpointerdown="handleKey(event, 9)">9</div>
+  <div class="key-empty"></div>
+  <div class="key" onpointerdown="handleKey(event, 0)">0</div>
+  <div class="key-empty"></div>
 </div>
 
 <script>
@@ -226,18 +263,18 @@
         osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-      } else if (type === 'tap') { // テンキー押下音
+      } else if (type === 'tap') { 
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(800, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
         gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
-      } else if (type === 'success') { // 大正解のファンファーレ風
+      } else if (type === 'success') { 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
-        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
-        osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.3); // C6
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); 
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); 
+        osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.3); 
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
       }
@@ -247,20 +284,19 @@
     } catch(e) {}
   }
 
-  // キャンバス設定
+  const worldEl = document.getElementById('world');
   const canvas = document.getElementById('swipe-canvas');
   const ctx = canvas.getContext('2d');
   const pCanvas = document.getElementById('particle-canvas');
   const pCtx = pCanvas.getContext('2d');
 
   function resizeCanvas() { 
-    canvas.width = window.innerWidth; canvas.height = window.innerHeight; 
-    pCanvas.width = window.innerWidth; pCanvas.height = window.innerHeight; 
+    canvas.width = worldEl.clientWidth; canvas.height = worldEl.clientHeight; 
+    pCanvas.width = worldEl.clientWidth; pCanvas.height = worldEl.clientHeight; 
   }
   window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
+  setTimeout(resizeCanvas, 50);
 
-  // スワイプイベント
   canvas.addEventListener('touchstart', handleStart, {passive: false});
   canvas.addEventListener('touchmove', handleMove, {passive: false});
   canvas.addEventListener('touchend', handleEnd);
@@ -271,10 +307,9 @@
   let isDrawing = false, startX = 0, startY = 0, currentX = 0, currentY = 0;
   let score = 0, comboCount = 0;
   let currentProblem = null;
-  let currentInput = ""; // テンキー入力用
-  let gameState = 'running'; // running, waiting_input, slicing, merging, waiting_answer, finishing
+  let currentInput = ""; 
+  let gameState = 'running'; 
 
-  // パーティクル（紙吹雪）システム
   let particles = [];
   const pColors = ['#ff4d4d', '#ffdb4d', '#4dff88', '#4d94ff', '#ff4da6'];
   function spawnConfetti() {
@@ -297,7 +332,7 @@
       let alive = [];
       particles.forEach(p => {
         p.x += p.vx; p.y += p.vy;
-        p.vy += 0.6; // 重力
+        p.vy += 0.6; 
         p.rot += p.vrot;
         if (p.y < pCanvas.height + 50) alive.push(p);
         
@@ -312,7 +347,7 @@
     }
     requestAnimationFrame(updateParticles);
   }
-  updateParticles(); // ループ開始
+  updateParticles(); 
 
   function generateProblem() {
     const a = Math.floor(Math.random() * 8) + 11;
@@ -325,6 +360,52 @@
       b = Math.floor(Math.random() * ones) + 1;
     }
     return { a, b, ones: a - 10 };
+  }
+
+  // ★追加：目盛り（ルーラー）を生成する関数
+  function createRuler(count) {
+    const ruler = document.createElement('div');
+    ruler.className = 'ruler-container';
+    for(let i=0; i<count; i++) {
+      const level = count - i; // 上から下に向かってレベルが下がる
+      const rSeg = document.createElement('div');
+      rSeg.className = 'ruler-segment';
+      if (level === 5 || level === 10) {
+        rSeg.classList.add('mark');
+        rSeg.dataset.level = level;
+      }
+      ruler.appendChild(rSeg);
+    }
+    return ruler;
+  }
+
+  // ★追加：合体後に「最終的な答え」に合わせた目盛りを表示する関数
+  function showFinalRulers() {
+    // 古い目盛りを完全に削除
+    document.querySelectorAll('.ruler-container').forEach(r => r.remove());
+    const cutFromTens = currentProblem.b > currentProblem.ones;
+
+    if (cutFromTens) {
+      // 10の塊が合流し、右側に最終的な答え(7など)がまとまる場合
+      const ansRuler = createRuler(currentProblem.a - currentProblem.b);
+      ansRuler.style.opacity = '0';
+      document.querySelectorAll('.block-group')[1].appendChild(ansRuler); // onesGroupへ追加
+      setTimeout(() => ansRuler.style.opacity = '1', 50); // スッと表示
+    } else {
+      // 10の塊はそのままで、1のバラが削られる場合
+      const tensRuler = createRuler(10);
+      tensRuler.style.opacity = '0';
+      document.querySelectorAll('.block-group')[0].appendChild(tensRuler);
+      
+      const ansCount = currentProblem.a - currentProblem.b - 10;
+      if(ansCount > 0) {
+        const ansRuler = createRuler(ansCount);
+        ansRuler.style.opacity = '0';
+        document.querySelectorAll('.block-group')[1].appendChild(ansRuler);
+        setTimeout(() => ansRuler.style.opacity = '1', 50);
+      }
+      setTimeout(() => tensRuler.style.opacity = '1', 50);
+    }
   }
 
   function loadStage() {
@@ -356,6 +437,7 @@
       tensRemain.dataset.wrong = "true";
     }
     tensGroup.appendChild(tensRemain); tensGroup.appendChild(tensCut);
+    tensGroup.appendChild(createRuler(10)); // 初期目盛りを追加
 
     const onesGroup = document.createElement('div');
     onesGroup.className = 'block-group';
@@ -378,11 +460,13 @@
       onesRemain.dataset.wrong = "true";
     }
     onesGroup.appendChild(onesRemain); onesGroup.appendChild(onesCut);
+    if (currentProblem.ones > 0) onesGroup.appendChild(createRuler(currentProblem.ones)); // 初期目盛りを追加
 
     playArea.appendChild(tensGroup); playArea.appendChild(onesGroup);
 
     eqArea.innerHTML = `${currentProblem.a} - <span class="sync-text">${currentProblem.b}</span> = <span id="answer">?</span>`;
     eqArea.classList.remove('highlight-answer');
+    
     document.getElementById('stage-container').style.transform = 'translateZ(0px)';
   }
 
@@ -405,15 +489,18 @@
   function handleStart(e) {
     if(gameState !== 'waiting_input') return;
     e.preventDefault(); isDrawing = true;
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
-    startY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const rect = canvas.getBoundingClientRect();
+    startX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    startY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
     currentX = startX; currentY = startY;
   }
 
   function handleMove(e) {
     if (!isDrawing) return; e.preventDefault();
-    currentX = e.touches ? e.touches[0].clientX : e.clientX;
-    currentY = e.touches ? e.touches[0].clientY : e.clientY;
+    const rect = canvas.getBoundingClientRect();
+    currentX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    currentY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
     drawSwipeLine();
   }
 
@@ -433,11 +520,18 @@
   function isIntersecting(el) {
     if (!el || el.children.length === 0) return false;
     const rect = el.getBoundingClientRect();
+    const cRect = canvas.getBoundingClientRect();
+    
+    const elTop = rect.top - cRect.top;
+    const elBottom = rect.bottom - cRect.top;
+    const elLeft = rect.left - cRect.left;
+    const elRight = rect.right - cRect.left;
+
     const steps = 20;
     for (let i = 0; i <= steps; i++) {
       const x = startX + (currentX - startX) * (i / steps);
       const y = startY + (currentY - startY) * (i / steps);
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return true;
+      if (x >= elLeft && x <= elRight && y >= elTop && y <= elBottom) return true;
     }
     return false;
   }
@@ -467,7 +561,9 @@
     gameState = 'slicing';
     playSound('slice');
 
-    document.querySelectorAll('.group-label').forEach(l => l.style.opacity = '0');
+    // ★修正：スライスと同時に古い目盛りとラベルをフェードアウト
+    document.querySelectorAll('.group-label, .ruler-container').forEach(l => l.style.opacity = '0');
+    
     document.querySelectorAll('.sync-target, .sync-text').forEach(el => {
       el.classList.remove('sync-target', 'sync-text');
       el.style.color = 'var(--text-color)'; el.style.textShadow = 'none';
@@ -517,23 +613,19 @@
     }, 450); 
   }
 
-  // ★ テンキー入力プロンプト
   function promptAnswer() {
     gameState = 'waiting_answer';
     currentInput = "";
-    
-    // テンキーをスライドイン
     document.getElementById('tenkey-container').classList.add('active');
     
-    // ステージを少し上に避けて見やすくする
-    document.getElementById('stage-container').style.transform = 'translateY(-15vh) translateZ(0px)';
-    
+    // ★追加：テンキー入力フェーズに入ると同時に、最終的な答えの目盛りを表示する
+    showFinalRulers();
+
     const ansSpan = document.getElementById('answer');
     ansSpan.innerText = '?';
     ansSpan.style.color = 'var(--text-color)';
   }
 
-  // ★ テンキー入力処理
   function handleKey(e, val) {
     if (gameState !== 'waiting_answer') return;
     e.preventDefault(); e.stopPropagation();
@@ -544,19 +636,14 @@
     const eqArea = document.getElementById('equation-area');
     const ansSpan = document.getElementById('answer');
     ansSpan.innerText = currentInput;
-    ansSpan.style.color = '#00aaff'; // 入力中は青色
+    ansSpan.style.color = '#00aaff'; 
 
     const targetAnswer = currentProblem.a - currentProblem.b;
 
     if (parseInt(currentInput) === targetAnswer) {
-      // 正解処理
       gameState = 'finishing';
-      
-      // テンキーを下げる＆ステージ位置戻す
       document.getElementById('tenkey-container').classList.remove('active');
-      document.getElementById('stage-container').style.transform = 'translateY(0) translateZ(0px)';
       
-      // 報酬アニメーション＆音
       playSound('success');
       spawnConfetti();
 
@@ -574,18 +661,15 @@
         comboEl.style.opacity = '1';
       }
 
-      // 喜びの余韻を持たせてから次へ
       setTimeout(advanceToNextStage, 2200);
 
     } else if (currentInput.length >= targetAnswer.toString().length) {
-      // 不正解処理（長さが到達したのに一致しない場合）
       playSound('error');
       comboCount = 0; document.getElementById('combo').style.opacity = '0';
       
       eqArea.classList.add('error-shake');
       ansSpan.style.color = '#ff4d4d';
       
-      // ブルッと震えた後に自動リセット（消去ボタン不要の直感設計）
       setTimeout(() => {
         eqArea.classList.remove('error-shake');
         currentInput = "";
