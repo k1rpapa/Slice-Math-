@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Slice Math</title>
+<style>
+  :root {
+    --bg-color: #f0f8ff;
+    --apple-color: #ff4d4d;
+    --apple-cut-color: #ff9999;
+    --ghost-color: rgba(0, 0, 0, 0.1);
+    --concrete-color: #888;
+    --text-color: #333;
+  }
+
+  * { box-sizing: border-box; touch-action: none; /* デフォルトのスワイプを無効化 */ }
+
+  body {
+    margin: 0; padding: 0;
+    font-family: 'Hiragino Rounded W8 ProN', 'Hiragino Maru Gothic ProN', sans-serif;
+    background-color: var(--bg-color);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100vh; overflow: hidden;
+  }
+
+  /* 数式エリア */
+  #equation-area {
+    font-size: 3rem; font-weight: bold; color: var(--text-color);
+    margin-bottom: 20px; z-index: 10;
+  }
+
+  /* プレイエリア */
+  #play-area {
+    display: flex; width: 90%; max-width: 600px;
+    height: 60vh; justify-content: space-between;
+    position: relative;
+  }
+
+  .side {
+    width: 45%; display: flex;
+    justify-content: center; align-items: flex-end;
+    position: relative;
+  }
+
+  /* ブロック共通スタイル */
+  .block-group {
+    display: flex; flex-direction: column; align-items: center;
+    position: absolute; bottom: 0;
+  }
+
+  .segment {
+    width: 60px; height: 30px;
+    background-color: var(--apple-color);
+    border: 2px solid #b30000;
+    border-radius: 8px; margin-bottom: -2px; /* 少し重ねて塊感を出す */
+    box-shadow: inset 0px 4px 6px rgba(255,255,255,0.4);
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease;
+  }
+
+  /* 左辺の構成 */
+  #tens-block { left: 10%; z-index: 5; }
+  #ones-block { left: 60%; z-index: 5; }
+
+  /* 切り落とされるグループ（下部） */
+  #cut-group {
+    display: flex; flex-direction: column;
+  }
+
+  /* ゴースト枠（右辺） */
+  #ghost-container {
+    display: flex; flex-direction: column; justify-content: flex-end;
+    position: absolute; bottom: 0; left: 20%;
+  }
+  .ghost-segment {
+    width: 60px; height: 30px;
+    background-color: transparent;
+    border: 2px dashed var(--ghost-color);
+    border-radius: 8px; margin-bottom: -2px;
+  }
+
+  /* スワイプ用のキャンバス */
+  #swipe-canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100vw; height: 100vh; z-index: 100;
+    pointer-events: auto; /* イベントを受け取る */
+  }
+
+  /* アニメーション：弾かれる（コンクリート化） */
+  .error-shake {
+    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    background-color: var(--concrete-color) !important;
+    border-color: #555 !important;
+  }
+
+  @keyframes shake {
+    10%, 90% { transform: translate3d(-2px, 0, 0); }
+    20%, 80% { transform: translate3d(4px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+    40%, 60% { transform: translate3d(6px, 0, 0); }
+  }
+
+  /* 解の提示アニメーション */
+  .highlight-answer {
+    animation: pulse 1s infinite alternate;
+  }
+  @keyframes pulse {
+    from { filter: brightness(1); transform: scale(1); }
+    to { filter: brightness(1.3); transform: scale(1.05); }
+  }
+</style>
+</head>
+<body>
+
+<div id="equation-area">11 - 5 = <span id="answer">?</span></div>
+
+<div id="play-area">
+  <div class="side" id="left-side">
+    <div class="block-group" id="tens-block">
+      <div id="remain-group">
+        <div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div>
+      </div>
+      <div id="cut-group">
+        <div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div>
+      </div>
+    </div>
+    <div class="block-group" id="ones-block">
+      <div class="segment"></div>
+    </div>
+  </div>
+
+  <div class="side" id="right-side">
+    <div id="ghost-container">
+      <div class="ghost-segment"></div><div class="ghost-segment"></div><div class="ghost-segment"></div><div class="ghost-segment"></div><div class="ghost-segment"></div>
+    </div>
+  </div>
+</div>
+
+<canvas id="swipe-canvas"></canvas>
+
+<script>
+  // Web Audio APIを用いた簡易サウンドジェネレーター
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  
+  function playSliceSound() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+  }
+
+  function playErrorSound() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+    osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+  }
+
+  // スワイプ処理用の変数とキャンバス設定
+  const canvas = document.getElementById('swipe-canvas');
+  const ctx = canvas.getContext('2d');
+  let isDrawing = false;
+  let startX = 0, startY = 0;
+  let currentX = 0, currentY = 0;
+  let isSolved = false;
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // イベントリスナーの登録（タッチ＆マウス）
+  canvas.addEventListener('touchstart', handleStart, {passive: false});
+  canvas.addEventListener('touchmove', handleMove, {passive: false});
+  canvas.addEventListener('touchend', handleEnd);
+  canvas.addEventListener('mousedown', handleStart);
+  canvas.addEventListener('mousemove', handleMove);
+  canvas.addEventListener('mouseup', handleEnd);
+
+  function handleStart(e) {
+    if(isSolved) return;
+    e.preventDefault();
+    isDrawing = true;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startX = clientX; startY = clientY;
+    currentX = clientX; currentY = clientY;
+  }
+
+  function handleMove(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    currentX = clientX; currentY = clientY;
+    drawSwipeLine();
+  }
+
+  function handleEnd(e) {
+    if (!isDrawing) return;
+    isDrawing = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // 線を消す
+    checkCollision();
+  }
+
+  function drawSwipeLine() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(currentX, currentY);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'cyan';
+    ctx.stroke();
+  }
+
+  // 線分と矩形（要素）の簡易交差判定関数
+  function isIntersecting(el) {
+    const rect = el.getBoundingClientRect();
+    // 始点と終点のY座標の間に要素があり、X座標も要素の範囲を跨いでいるか判定
+    const minY = Math.min(startY, currentY);
+    const maxY = Math.max(startY, currentY);
+    const minX = Math.min(startX, currentX);
+    const maxX = Math.max(startX, currentX);
+
+    return !(maxX < rect.left || minX > rect.right || maxY < rect.top || minY > rect.bottom);
+  }
+
+  function checkCollision() {
+    const onesBlock = document.getElementById('ones-block').firstElementChild;
+    const cutGroup = document.getElementById('cut-group');
+    
+    // 1のバラを切ろうとした場合（エラーハンドリング）
+    if (isIntersecting(onesBlock)) {
+      playErrorSound();
+      onesBlock.classList.add('error-shake');
+      setTimeout(() => { onesBlock.classList.remove('error-shake'); }, 400);
+      return;
+    }
+
+    // 10の塊の切断予定部分を切った場合
+    if (isIntersecting(cutGroup)) {
+      executeSliceAnimation();
+    }
+  }
+
+  function executeSliceAnimation() {
+    if(isSolved) return;
+    isSolved = true;
+    playSliceSound();
+
+    const cutGroup = document.getElementById('cut-group');
+    const ghostContainer = document.getElementById('ghost-container');
+    
+    // 座標計算してゴースト枠へ飛ばす
+    const cutRect = cutGroup.getBoundingClientRect();
+    const ghostRect = ghostContainer.getBoundingClientRect();
+    const moveX = ghostRect.left - cutRect.left;
+    const moveY = ghostRect.top - cutRect.top;
+
+    cutGroup.style.transform = `translate(${moveX}px, ${moveY}px)`;
+    
+    // ゴースト枠に重なった後、消滅させる
+    setTimeout(() => {
+      cutGroup.style.opacity = '0';
+      ghostContainer.style.opacity = '0';
+      
+      // 解の提示（残ったブロックをハイライト）
+      showAnswer();
+    }, 600);
+  }
+
+  function showAnswer() {
+    document.getElementById('answer').innerText = '6';
+    document.getElementById('answer').style.color = '#ff4d4d';
+    
+    const remainGroup = document.getElementById('remain-group');
+    const onesBlock = document.getElementById('ones-block');
+    
+    // 残ったものをアニメーションで強調
+    remainGroup.classList.add('highlight-answer');
+    onesBlock.classList.add('highlight-answer');
+
+    // 効果音（正解音）
+    setTimeout(() => {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+      osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1); // C#5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2); // E5
+      osc.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+    }, 200);
+  }
+</script>
+</body>
+</html>
