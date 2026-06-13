@@ -3,355 +3,381 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Slice Math v1.4</title>
+<title>Slice Math 3D - Isometric Rush</title>
 <style>
-  :root {
-    --bg-color: #f0f8ff;
-    --apple-color: #ff4d4d;
-    --ghost-border: #88aadd;
-    --ghost-bg: #eef2f8;
-    --sync-glow: rgba(0, 180, 255, 0.9);
-    --concrete-color: #888;
-    --text-color: #333;
-  }
-
-  * { box-sizing: border-box; touch-action: none; }
-
   body {
-    margin: 0; padding: 0;
+    margin: 0; padding: 0; overflow: hidden;
+    background-color: #dceaf5;
     font-family: 'Hiragino Rounded W8 ProN', 'Hiragino Maru Gothic ProN', sans-serif;
-    background-color: var(--bg-color);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    height: 100vh; overflow: hidden;
+    touch-action: none; user-select: none;
   }
-
-  #equation-area {
-    font-size: 3rem; font-weight: bold; color: var(--text-color);
-    margin-bottom: 20px; z-index: 10;
-  }
-
-  #play-area {
-    display: flex; width: 90%; max-width: 600px;
-    height: 60vh; justify-content: space-between;
-    position: relative;
-  }
-
-  .side {
-    width: 45%; display: flex;
-    justify-content: center; align-items: flex-end;
-    position: relative;
-  }
-
-  .block-group {
-    display: flex; flex-direction: column; align-items: center;
-    position: absolute; bottom: 0;
-  }
-
-  .segment {
-    width: 60px; height: 30px;
-    background-color: var(--apple-color);
-    border: 2px solid #b30000;
-    border-radius: 8px; margin-bottom: -2px;
-    box-shadow: inset 0px 4px 6px rgba(255,255,255,0.4);
-    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease;
-    position: relative;
-    z-index: 2;
-  }
-
-  #remain-group {
-    display: flex; flex-direction: column;
-    z-index: 10;
-  }
-
-  #tens-block { left: 10%; z-index: 5; }
-  #ones-block { left: 60%; z-index: 5; }
-
-  #cut-group {
-    display: flex; flex-direction: column; position: relative;
-  }
-
-  #ghost-container {
-    display: flex; flex-direction: column; justify-content: flex-end;
-    position: absolute; bottom: 0; left: 20%;
-  }
+  #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
   
-  .ghost-segment {
-    width: 60px; height: 30px;
-    background-color: var(--ghost-bg);
-    border: 3px dashed var(--ghost-border);
-    border-radius: 8px; margin-bottom: -2px;
-    transition: opacity 0.5s ease;
+  #ui-layer {
+    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 10; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
   }
 
-  .sync-target {
-    animation: syncPulse 1s infinite alternate;
-  }
-  .ghost-segment.sync-target {
-    animation: syncPulseGhost 1s infinite alternate;
-  }
-
-  @keyframes syncPulse {
-    from { box-shadow: 0 0 0px transparent; filter: brightness(1); }
-    to { box-shadow: 0 0 16px 6px var(--sync-glow); filter: brightness(1.2); z-index: 6; }
-  }
-  
-  @keyframes syncPulseGhost {
-    from { box-shadow: 0 0 0px transparent; background-color: var(--ghost-bg); }
-    to { box-shadow: 0 0 16px 6px var(--sync-glow); background-color: #cceeff; border-color: #00aaff; }
+  #score-board {
+    margin-top: 20px; font-size: 2rem; font-weight: bold; color: #333;
+    background: rgba(255,255,255,0.7); padding: 10px 30px; border-radius: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   }
 
-  #swipe-canvas {
-    position: absolute; top: 0; left: 0;
-    width: 100vw; height: 100vh; z-index: 100;
-    pointer-events: auto;
+  #equation-board {
+    margin-bottom: 50px; font-size: 4rem; font-weight: bold; color: #333;
+    background: rgba(255,255,255,0.9); padding: 10px 40px; border-radius: 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
   }
 
-  .error-shake {
-    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
-    background-color: var(--concrete-color) !important;
-    border-color: #555 !important;
-  }
-
-  @keyframes shake {
-    10%, 90% { transform: translate3d(-2px, 0, 0); }
-    20%, 80% { transform: translate3d(4px, 0, 0); }
-    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-    40%, 60% { transform: translate3d(6px, 0, 0); }
-  }
-
-  .highlight-answer {
-    animation: pulse 0.8s infinite alternate ease-in-out;
-  }
-  @keyframes pulse {
-    from { filter: drop-shadow(0 0 0px transparent); }
-    to { filter: drop-shadow(0 0 10px rgba(255, 77, 77, 0.9)) brightness(1.25); }
-  }
+  .highlight { color: #00aaff; text-shadow: 0 0 15px rgba(0, 180, 255, 0.8); }
+  .answer-text { color: #ff4d4d; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="equation-area">11 - 5 = <span id="answer">?</span></div>
+<div id="canvas-container"></div>
 
-<div id="play-area">
-  <div class="side" id="left-side">
-    <div class="block-group" id="tens-block">
-      <div id="remain-group">
-        <div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div><div class="segment"></div>
-      </div>
-      <div id="cut-group">
-        <div class="segment sync-target"></div><div class="segment sync-target"></div><div class="segment sync-target"></div><div class="segment sync-target"></div><div class="segment sync-target"></div>
-      </div>
-    </div>
-    <div class="block-group" id="ones-block">
-      <div class="segment"></div>
-    </div>
-  </div>
-
-  <div class="side" id="right-side">
-    <div id="ghost-container">
-      <div class="ghost-segment sync-target"></div><div class="ghost-segment sync-target"></div><div class="ghost-segment sync-target"></div><div class="ghost-segment sync-target"></div><div class="ghost-segment sync-target"></div>
-    </div>
-  </div>
+<div id="ui-layer">
+  <div id="score-board">SCORE: <span id="score">0</span></div>
+  <div id="equation-board">11 - <span class="highlight">5</span> = ?</div>
 </div>
 
-<canvas id="swipe-canvas"></canvas>
-
 <script>
+  // --- 音声生成 ---
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  
   function playSound(type) {
-    try {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      
-      if (type === 'slice') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
-      } else if (type === 'error') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.2);
-      } else if (type === 'stack') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
-        gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-      } else if (type === 'success') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2);
-        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-        osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-      }
-    } catch(e) { console.warn("Audio Context is blocked or not supported", e); }
-  }
-
-  const canvas = document.getElementById('swipe-canvas');
-  const ctx = canvas.getContext('2d');
-  let isDrawing = false;
-  let startX = 0, startY = 0;
-  let currentX = 0, currentY = 0;
-  let isSolved = false;
-
-  function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resizeCanvas);
-  resizeCanvas();
-
-  canvas.addEventListener('touchstart', handleStart, {passive: false});
-  canvas.addEventListener('touchmove', handleMove, {passive: false});
-  canvas.addEventListener('touchend', handleEnd);
-  canvas.addEventListener('mousedown', handleStart);
-  canvas.addEventListener('mousemove', handleMove);
-  canvas.addEventListener('mouseup', handleEnd);
-
-  function handleStart(e) {
-    if(isSolved) return;
-    e.preventDefault();
-    isDrawing = true;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    startX = clientX; startY = clientY;
-    currentX = clientX; currentY = clientY;
-  }
-
-  function handleMove(e) {
-    if (!isDrawing) return;
-    e.preventDefault();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    currentX = clientX; currentY = clientY;
-    drawSwipeLine();
-  }
-
-  function handleEnd(e) {
-    if (!isDrawing) return;
-    isDrawing = false;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    checkCollision();
-  }
-
-  function drawSwipeLine() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(currentX, currentY);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = '#00e5ff';
-    ctx.stroke();
-  }
-
-  // ★修正箇所：スワイプの軌跡（線分）が対象を通過したかを正確に判定する処理
-  function isIntersecting(el) {
-    const rect = el.getBoundingClientRect();
-    const steps = 20; // 線を20分割してチェック
-    for (let i = 0; i <= steps; i++) {
-      const x = startX + (currentX - startX) * (i / steps);
-      const y = startY + (currentY - startY) * (i / steps);
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function checkCollision() {
-    // 誤タップ防止（スワイプ距離が短すぎる場合は何もしない）
-    const distance = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
-    if (distance < 30) return;
-
-    const cutGroup = document.getElementById('cut-group');
-    const onesBlock = document.getElementById('ones-block').firstElementChild;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
     
-    // ★修正箇所：正しい切断対象（10の塊）を「最優先」でチェックする
-    if (isIntersecting(cutGroup)) {
-      executeSliceAnimation();
-      return;
-    }
-
-    // 正解の対象を掠めておらず、間違ったブロックだけを切ろうとした場合
-    if (isIntersecting(onesBlock)) {
-      playSound('error');
-      onesBlock.classList.add('error-shake');
-      setTimeout(() => { onesBlock.classList.remove('error-shake'); }, 400);
+    if (type === 'slice') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(1400, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'break') {
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+    } else if (type === 'stack') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'success') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.3);
     }
   }
 
-  function executeSliceAnimation() {
-    if(isSolved) return;
-    isSolved = true;
+  // --- 3Dセットアップ ---
+  const container = document.getElementById('canvas-container');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xdceaf5);
+  scene.fog = new THREE.Fog(0xdceaf5, 20, 80);
+
+  // ★ 左下から右上へ進むためのカメラ配置（アイソメトリック風）
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(-15, 15, 25); // 左手前・上空
+  camera.lookAt(5, 0, -5); // 右奥の地平線を見る
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  // 照明
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+  dirLight.position.set(-10, 20, 10);
+  dirLight.castShadow = true;
+  scene.add(dirLight);
+
+  // 床とグリッド
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshPhongMaterial({ color: 0xb5d3ed, depthWrite: false })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const gridHelper = new THREE.GridHelper(200, 50, 0x88aadd, 0x88aadd);
+  gridHelper.position.y = 0.1;
+  scene.add(gridHelper);
+
+  // --- マテリアル ---
+  const blockMat = new THREE.MeshPhongMaterial({ color: 0xff4d4d });
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x990000, linewidth: 2 }); // ★ 境界線をクッキリさせる濃い赤
+  const knifeMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 100 });
+  const handleMat = new THREE.MeshPhongMaterial({ color: 0x4a3020 });
+
+  // --- ナイフの作成 (★ 小型化) ---
+  const knifeGroup = new THREE.Group();
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3, 0.8), knifeMat);
+  blade.position.y = 2;
+  blade.castShadow = true;
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5), handleMat);
+  handle.position.y = -0.25;
+  handle.castShadow = true;
+  knifeGroup.add(blade);
+  knifeGroup.add(handle);
+  scene.add(knifeGroup);
+  
+  // ナイフ待機位置（画面左下）
+  const knifeWaitPos = new THREE.Vector3(-10, 8, 15);
+  knifeGroup.position.copy(knifeWaitPos);
+
+  // --- ゲーム状態 ---
+  let score = 0;
+  let blocks = [];
+  let currentProblem = null;
+  let gameState = 'running'; // running, waiting_input, slicing, merging, finishing
+  let runSpeed = 0.8;
+  let stageProgress = -40; // ブロックの進行度（マイナスが手前、プラスが奥）
+
+  function generateProblem() {
+    const a = Math.floor(Math.random() * 8) + 11;
+    let b = Math.floor(Math.random() * 8) + 1;
+    if(b >= (a - 10)) b = (a - 10) + 1 + Math.floor(Math.random()*2);
+    return { a, b, ones: a - 10 };
+  }
+
+  function createBlocks(prob) {
+    blocks.forEach(b => { scene.remove(b.mesh); scene.remove(b.edges); });
+    blocks = [];
+
+    const cutFromTens = prob.b > prob.ones;
+    const boxGeo = new THREE.BoxGeometry(2.8, 1.4, 2.8); // 少し隙間を空けるサイズ
+    const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+    
+    // 配置のオフセット（進行方向に対して左と右に分ける）
+    const offsetTens = { x: -2.5, z: -2.5 }; // 左側
+    const offsetOnes = { x: 2.5, z: 2.5 };   // 右側
+
+    // 10の塊
+    for(let i=0; i<10; i++) {
+      const mesh = new THREE.Mesh(boxGeo, blockMat);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      const edges = new THREE.LineSegments(edgeGeo, edgeMat); // ★境界線を追加
+      mesh.add(edges);
+      
+      scene.add(mesh);
+      blocks.push({
+        mesh: mesh, group: 'tens', index: i,
+        isTarget: cutFromTens && i >= (10 - prob.b),
+        offsetX: offsetTens.x, offsetZ: offsetTens.z,
+        yBase: i * 1.5 + 0.75,
+        state: 'idle', v: new THREE.Vector3(), rv: new THREE.Vector3()
+      });
+    }
+
+    // 1のバラ
+    for(let i=0; i<prob.ones; i++) {
+      const mesh = new THREE.Mesh(boxGeo, blockMat);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+      mesh.add(edges);
+
+      scene.add(mesh);
+      blocks.push({
+        mesh: mesh, group: 'ones', index: i,
+        isTarget: !cutFromTens && i >= (prob.ones - prob.b),
+        offsetX: offsetOnes.x, offsetZ: offsetOnes.z,
+        yBase: i * 1.5 + 0.75,
+        state: 'idle', v: new THREE.Vector3(), rv: new THREE.Vector3()
+      });
+    }
+
+    document.getElementById('equation-board').innerHTML = `${prob.a} - <span class="highlight">${prob.b}</span> = ?`;
+  }
+
+  function loadNextStage() {
+    currentProblem = generateProblem();
+    stageProgress = -40; // 画面左下手前（はるか後ろ）からリスタート
+    createBlocks(currentProblem);
+    updateBlockPositions();
+    gameState = 'running';
+  }
+
+  function updateBlockPositions() {
+    blocks.forEach(b => {
+      if (b.state === 'idle') {
+        // ★ XとZを同時に動かすことで、左手前から右奥への斜め移動を実現
+        b.mesh.position.set(
+          stageProgress + b.offsetX,
+          b.yBase,
+          -stageProgress + b.offsetZ
+        );
+      }
+    });
+  }
+
+  loadNextStage();
+
+  // --- 入力（タップでスライス） ---
+  window.addEventListener('pointerdown', () => {
+    if (gameState !== 'waiting_input') return;
+    executeSlice();
+  });
+
+  function executeSlice() {
+    gameState = 'slicing';
     playSound('slice');
 
-    const cutGroup = document.getElementById('cut-group');
-    const ghostContainer = document.getElementById('ghost-container');
-    const remainGroup = document.getElementById('remain-group');
-    const onesBlock = document.getElementById('ones-block');
+    const targetBlock = blocks.find(b => b.isTarget);
+    if(!targetBlock) return;
     
-    document.querySelectorAll('.sync-target').forEach(el => {
-      el.classList.remove('sync-target');
+    // 切断対象のY座標中心を狙う
+    const targetY = targetBlock.yBase;
+    const targetX = targetBlock.mesh.position.x;
+    const targetZ = targetBlock.mesh.position.z;
+    
+    let t = 0;
+    const startPos = knifeWaitPos.clone();
+    const endPos = new THREE.Vector3(targetX, targetY, targetZ);
+
+    function animateKnife() {
+      t += 0.1;
+      if (t <= 1) {
+        knifeGroup.position.lerpVectors(startPos, endPos, t);
+        knifeGroup.rotation.x -= 0.8; // ★ 進行方向に合わせて前転回転
+        requestAnimationFrame(animateKnife);
+      } else {
+        playSound('break');
+        shatterBlocks();
+      }
+    }
+    animateKnife();
+  }
+
+  function shatterBlocks() {
+    blocks.forEach(b => {
+      if (b.isTarget) {
+        b.state = 'shattered';
+        // 右奥へ散らばるようにベロシティを設定
+        b.v.set(
+          Math.random() * 0.3 + 0.2, // X: 右へ
+          Math.random() * 0.4 + 0.1, // Y: 上へ
+          -Math.random() * 0.3 - 0.2 // Z: 奥へ
+        );
+        b.rv.set(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
+      }
     });
 
-    const cutRect = cutGroup.getBoundingClientRect();
-    const ghostRect = ghostContainer.getBoundingClientRect();
-    const moveCutX = ghostRect.left - cutRect.left;
-    const moveCutY = ghostRect.top - cutRect.top;
-
-    cutGroup.style.transform = `translate(${moveCutX}px, ${moveCutY}px)`;
-    
     setTimeout(() => {
-      cutGroup.style.opacity = '0';
-      ghostContainer.style.opacity = '0';
+      gameState = 'merging';
+      mergeBlocks();
+    }, 800); // 散らばるのを少し待つ
+  }
+
+  function mergeBlocks() {
+    const remainTens = blocks.filter(b => b.group === 'tens' && !b.isTarget);
+    const ones = blocks.filter(b => b.group === 'ones' && !b.isTarget);
+    
+    remainTens.forEach((b, i) => {
+      b.state = 'moving';
+      // 1のバラの積み上げ位置（右側）へ移動
+      b.targetPos = new THREE.Vector3(
+        stageProgress + b.offsetX + 5, // X軸を右側（Ones）に合わせる (2.5 - (-2.5) = 5)
+        (ones.length + i) * 1.5 + 0.75,
+        -stageProgress + b.offsetZ - 5 // Z軸も右側に合わせる
+      );
+    });
+
+    setTimeout(() => {
+      playSound('success');
+      score += 100;
+      document.getElementById('score').innerText = score;
+      document.getElementById('equation-board').innerHTML = `
+        ${currentProblem.a} - ${currentProblem.b} = <span class="answer-text">${currentProblem.a - currentProblem.b}</span>
+      `;
       
-      const remainRect = remainGroup.getBoundingClientRect();
-      const onesRect = onesBlock.getBoundingClientRect();
+      gameState = 'finishing'; // 合体完了、画面右奥へ去っていく
       
-      const moveRemainX = onesRect.left - remainRect.left;
-      const moveRemainY = onesRect.top - remainRect.bottom + 2;
-
-      remainGroup.style.transition = 'transform 0.5s cubic-bezier(0.5, 0, 0.75, 0)'; 
-      remainGroup.style.transform = `translate(${moveRemainX}px, ${moveRemainY}px)`;
-
-      setTimeout(() => {
-        playSound('stack');
-        showAnswer();
-      }, 500);
-
+      setTimeout(() => { loadNextStage(); }, 1200);
     }, 600);
   }
 
-  function showAnswer() {
-    document.getElementById('answer').innerText = '6';
-    document.getElementById('answer').style.color = '#ff4d4d';
-    
-    const remainGroup = document.getElementById('remain-group');
-    const onesBlock = document.getElementById('ones-block');
-    
-    remainGroup.classList.add('highlight-answer');
-    onesBlock.classList.add('highlight-answer');
+  // --- メインループ ---
+  function animate() {
+    requestAnimationFrame(animate);
 
-    setTimeout(() => { playSound('success'); }, 200);
+    // 床グリッドを斜めにスクロールさせて疾走感を演出
+    gridHelper.position.x += runSpeed;
+    gridHelper.position.z -= runSpeed;
+    if (gridHelper.position.x > 10) {
+      gridHelper.position.x %= 10;
+      gridHelper.position.z %= 10;
+    }
+
+    if (gameState === 'running') {
+      stageProgress += runSpeed;
+      updateBlockPositions();
+      
+      // 中心付近（0）でストップ
+      if (stageProgress >= 0) {
+        stageProgress = 0;
+        updateBlockPositions();
+        gameState = 'waiting_input';
+        
+        // ナイフを初期位置に戻す
+        knifeGroup.position.copy(knifeWaitPos);
+        knifeGroup.rotation.set(0, 0, Math.PI / 8); // ちょっと構えた角度
+      }
+    } else if (gameState === 'finishing') {
+      // クリア後、残ったブロックがさらに右奥へ進んで退場する
+      stageProgress += runSpeed * 1.5;
+      updateBlockPositions();
+      // ナイフも一緒に飛んでいく
+      knifeGroup.position.x += runSpeed;
+      knifeGroup.position.z -= runSpeed;
+    }
+
+    // アニメーション更新
+    blocks.forEach(b => {
+      if (b.state === 'shattered') {
+        b.mesh.position.add(b.v);
+        b.v.y -= 0.02; // 重力
+        b.mesh.rotation.x += b.rv.x;
+        b.mesh.rotation.y += b.rv.y;
+      } else if (b.state === 'moving') {
+        b.mesh.position.lerp(b.targetPos, 0.15);
+        if (b.mesh.position.distanceTo(b.targetPos) < 0.1 && b.index === 0) {
+            playSound('stack'); 
+            b.state = 'idle'; // 音の重複防止
+        }
+      }
+    });
+
+    renderer.render(scene, camera);
   }
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  animate();
 </script>
 </body>
 </html>
