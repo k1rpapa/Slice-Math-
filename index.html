@@ -3,381 +3,618 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Slice Math 3D - Isometric Rush</title>
+<title>Slice Math - 3D Rush (v2.5)</title>
 <style>
+  :root {
+    --bg-color: #e0f0ff;
+    --apple-color: #ff4d4d;
+    --sync-glow: rgba(0, 180, 255, 0.9);
+    --sync-text-color: #00aaff;
+    --concrete-color: #888;
+    --text-color: #333;
+    --floor-light: #cde4f7;
+    --floor-dark: #b5d3ed;
+  }
+
+  * { box-sizing: border-box; touch-action: none; user-select: none; }
+
   body {
-    margin: 0; padding: 0; overflow: hidden;
-    background-color: #dceaf5;
+    margin: 0; padding: 0;
     font-family: 'Hiragino Rounded W8 ProN', 'Hiragino Maru Gothic ProN', sans-serif;
-    touch-action: none; user-select: none;
+    background-color: var(--bg-color);
+    overflow: hidden;
   }
-  #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-  
+
+  #world {
+    perspective: 800px;
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #floor {
+    position: absolute;
+    top: 55vh; left: -50vw;
+    width: 200vw; height: 150vh;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--floor-light), var(--floor-light) 60px,
+      var(--floor-dark) 60px, var(--floor-dark) 120px
+    );
+    transform: rotateX(75deg);
+    transform-origin: top center;
+    animation: rushForward 0.6s linear infinite;
+    z-index: 1;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%);
+  }
+
+  @keyframes rushForward {
+    from { background-position: 0 0; }
+    to { background-position: 0 120px; }
+  }
+
   #ui-layer {
-    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-    z-index: 10; pointer-events: none;
-    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    position: absolute; top: 20px; left: 20px; z-index: 50;
+    font-size: 1.5rem; font-weight: bold; color: var(--text-color);
+  }
+  #combo { color: #ff8c00; font-size: 2rem; margin-top: 5px; opacity: 0; transition: opacity 0.2s;}
+
+  #stage-container {
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    width: 100%; height: 75vh; z-index: 10;
+    transform: translateZ(0px); 
+    filter: drop-shadow(0px 30px 20px rgba(0,0,0,0.15));
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
-  #score-board {
-    margin-top: 20px; font-size: 2rem; font-weight: bold; color: #333;
-    background: rgba(255,255,255,0.7); padding: 10px 30px; border-radius: 20px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  #play-area {
+    display: flex; justify-content: center; align-items: flex-end;
+    gap: 30px; margin-bottom: 40px; position: relative;
   }
 
-  #equation-board {
-    margin-bottom: 50px; font-size: 4rem; font-weight: bold; color: #333;
+  .block-group { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .stack { display: flex; flex-direction: column; align-items: center; position: relative; }
+
+  .segment {
+    width: 60px; height: 30px;
+    background-color: var(--apple-color);
+    border: 2px solid #b30000;
+    border-radius: 8px; margin-bottom: -4px;
+    box-shadow: inset 0px 4px 6px rgba(255,255,255,0.4);
+    position: relative; z-index: 2;
+  }
+
+  .group-label {
+    position: absolute; bottom: 15px; left: 50%;
+    transform: translate(-50%, 50%);
+    font-size: 2.2rem; font-weight: bold;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0px 2px 6px rgba(179, 0, 0, 0.8);
+    pointer-events: none; z-index: 20; transition: opacity 0.2s ease;
+  }
+
+  #equation-area {
+    font-size: 4rem; font-weight: bold; color: var(--text-color);
     background: rgba(255,255,255,0.9); padding: 10px 40px; border-radius: 20px;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1); margin-bottom: 20px;
+    transition: transform 0.3s;
   }
 
-  .highlight { color: #00aaff; text-shadow: 0 0 15px rgba(0, 180, 255, 0.8); }
-  .answer-text { color: #ff4d4d; }
+  .sync-text { color: var(--sync-text-color); animation: syncPulseText 0.8s infinite alternate; }
+  .sync-target { animation: syncPulse 0.8s infinite alternate; }
+
+  @keyframes syncPulseText {
+    from { text-shadow: 0 0 0px transparent; filter: brightness(1); }
+    to { text-shadow: 0 0 16px var(--sync-glow); filter: brightness(1.2); }
+  }
+  @keyframes syncPulse {
+    from { box-shadow: 0 0 0px transparent; filter: brightness(1); }
+    to { box-shadow: 0 0 16px 6px var(--sync-glow); filter: brightness(1.2); z-index: 6; }
+  }
+
+  .error-shake {
+    animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+    background-color: var(--concrete-color) !important;
+    border-color: #555 !important; color: white !important;
+  }
+
+  @keyframes shake {
+    10%, 90% { transform: translate3d(-2px, 0, 0); }
+    20%, 80% { transform: translate3d(4px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+    40%, 60% { transform: translate3d(6px, 0, 0); }
+  }
+
+  .highlight-answer { animation: pulse 0.5s infinite alternate ease-in-out; }
+  @keyframes pulse {
+    from { filter: drop-shadow(0 0 0px transparent); }
+    to { filter: drop-shadow(0 0 12px rgba(255, 77, 77, 1)) brightness(1.3); }
+  }
+
+  /* ★ キャンバスレイヤー */
+  #swipe-canvas {
+    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 100; pointer-events: auto;
+  }
+  #particle-canvas {
+    position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+    z-index: 150; pointer-events: none; /* タッチを阻害しない */
+  }
+
+  /* ★ テンキーコンテナ */
+  #tenkey-container {
+    position: absolute; bottom: -50vh; left: 0; width: 100vw; height: 42vh;
+    background: #ffffff;
+    border-top-left-radius: 30px; border-top-right-radius: 30px;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.15);
+    transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* ポップに出現 */
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; padding: 25px; z-index: 200; box-sizing: border-box;
+  }
+  #tenkey-container.active { bottom: 0; }
+  
+  .key {
+    background: #f0f8ff; border: 2px solid #b5d3ed; border-radius: 20px;
+    font-size: 2.8rem; font-weight: bold; color: #333;
+    display: flex; justify-content: center; align-items: center;
+    box-shadow: 0 6px 0 #b5d3ed; transition: transform 0.1s, box-shadow 0.1s;
+    cursor: pointer; user-select: none;
+  }
+  .key:active { transform: translateY(6px); box-shadow: 0 0 0 #b5d3ed; }
+  .key-empty { pointer-events: none; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="canvas-container"></div>
+<div id="world">
+  <div id="floor"></div>
 
-<div id="ui-layer">
-  <div id="score-board">SCORE: <span id="score">0</span></div>
-  <div id="equation-board">11 - <span class="highlight">5</span> = ?</div>
+  <div id="ui-layer">
+    <div>SCORE: <span id="score-val">0</span></div>
+    <div id="combo">COMBO!</div>
+  </div>
+
+  <div id="stage-container">
+    <div id="play-area"></div>
+    <div id="equation-area"></div>
+  </div>
+
+  <canvas id="swipe-canvas"></canvas>
+  <canvas id="particle-canvas"></canvas>
+
+  <div id="tenkey-container">
+    <div class="key" onpointerdown="handleKey(event, 1)">1</div>
+    <div class="key" onpointerdown="handleKey(event, 2)">2</div>
+    <div class="key" onpointerdown="handleKey(event, 3)">3</div>
+    <div class="key" onpointerdown="handleKey(event, 4)">4</div>
+    <div class="key" onpointerdown="handleKey(event, 5)">5</div>
+    <div class="key" onpointerdown="handleKey(event, 6)">6</div>
+    <div class="key" onpointerdown="handleKey(event, 7)">7</div>
+    <div class="key" onpointerdown="handleKey(event, 8)">8</div>
+    <div class="key" onpointerdown="handleKey(event, 9)">9</div>
+    <div class="key-empty"></div>
+    <div class="key" onpointerdown="handleKey(event, 0)">0</div>
+    <div class="key-empty"></div>
+  </div>
 </div>
 
 <script>
-  // --- 音声生成 ---
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    
-    if (type === 'slice') {
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(1400, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    try {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      if (type === 'slice') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      } else if (type === 'error') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+      } else if (type === 'stack') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+      } else if (type === 'tap') { // テンキー押下音
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+      } else if (type === 'success') { // 大正解のファンファーレ風
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+        osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.3); // C6
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+      }
       osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(); osc.stop(audioCtx.currentTime + 0.1);
-    } else if (type === 'break') {
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(); osc.stop(audioCtx.currentTime + 0.15);
-    } else if (type === 'stack') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(); osc.stop(audioCtx.currentTime + 0.1);
-    } else if (type === 'success') {
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime);
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-    }
+      osc.start(); 
+      osc.stop(audioCtx.currentTime + (type==='success'? 0.5 : 0.2));
+    } catch(e) {}
   }
 
-  // --- 3Dセットアップ ---
-  const container = document.getElementById('canvas-container');
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xdceaf5);
-  scene.fog = new THREE.Fog(0xdceaf5, 20, 80);
+  // キャンバス設定
+  const canvas = document.getElementById('swipe-canvas');
+  const ctx = canvas.getContext('2d');
+  const pCanvas = document.getElementById('particle-canvas');
+  const pCtx = pCanvas.getContext('2d');
 
-  // ★ 左下から右上へ進むためのカメラ配置（アイソメトリック風）
-  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
-  camera.position.set(-15, 15, 25); // 左手前・上空
-  camera.lookAt(5, 0, -5); // 右奥の地平線を見る
+  function resizeCanvas() { 
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight; 
+    pCanvas.width = window.innerWidth; pCanvas.height = window.innerHeight; 
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  container.appendChild(renderer.domElement);
+  // スワイプイベント
+  canvas.addEventListener('touchstart', handleStart, {passive: false});
+  canvas.addEventListener('touchmove', handleMove, {passive: false});
+  canvas.addEventListener('touchend', handleEnd);
+  canvas.addEventListener('mousedown', handleStart);
+  canvas.addEventListener('mousemove', handleMove);
+  canvas.addEventListener('mouseup', handleEnd);
 
-  // 照明
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-  scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-  dirLight.position.set(-10, 20, 10);
-  dirLight.castShadow = true;
-  scene.add(dirLight);
-
-  // 床とグリッド
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(200, 200),
-    new THREE.MeshPhongMaterial({ color: 0xb5d3ed, depthWrite: false })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor);
-
-  const gridHelper = new THREE.GridHelper(200, 50, 0x88aadd, 0x88aadd);
-  gridHelper.position.y = 0.1;
-  scene.add(gridHelper);
-
-  // --- マテリアル ---
-  const blockMat = new THREE.MeshPhongMaterial({ color: 0xff4d4d });
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x990000, linewidth: 2 }); // ★ 境界線をクッキリさせる濃い赤
-  const knifeMat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 100 });
-  const handleMat = new THREE.MeshPhongMaterial({ color: 0x4a3020 });
-
-  // --- ナイフの作成 (★ 小型化) ---
-  const knifeGroup = new THREE.Group();
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3, 0.8), knifeMat);
-  blade.position.y = 2;
-  blade.castShadow = true;
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5), handleMat);
-  handle.position.y = -0.25;
-  handle.castShadow = true;
-  knifeGroup.add(blade);
-  knifeGroup.add(handle);
-  scene.add(knifeGroup);
-  
-  // ナイフ待機位置（画面左下）
-  const knifeWaitPos = new THREE.Vector3(-10, 8, 15);
-  knifeGroup.position.copy(knifeWaitPos);
-
-  // --- ゲーム状態 ---
-  let score = 0;
-  let blocks = [];
+  let isDrawing = false, startX = 0, startY = 0, currentX = 0, currentY = 0;
+  let score = 0, comboCount = 0;
   let currentProblem = null;
-  let gameState = 'running'; // running, waiting_input, slicing, merging, finishing
-  let runSpeed = 0.8;
-  let stageProgress = -40; // ブロックの進行度（マイナスが手前、プラスが奥）
+  let currentInput = ""; // テンキー入力用
+  let gameState = 'running'; // running, waiting_input, slicing, merging, waiting_answer, finishing
+
+  // パーティクル（紙吹雪）システム
+  let particles = [];
+  const pColors = ['#ff4d4d', '#ffdb4d', '#4dff88', '#4d94ff', '#ff4da6'];
+  function spawnConfetti() {
+    for(let i=0; i<80; i++) {
+      particles.push({
+        x: pCanvas.width / 2,
+        y: pCanvas.height / 2 + 50,
+        vx: (Math.random() - 0.5) * 25,
+        vy: (Math.random() - 0.5) * 25 - 10,
+        size: Math.random() * 15 + 10,
+        color: pColors[Math.floor(Math.random() * pColors.length)],
+        rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 0.4
+      });
+    }
+  }
+  function updateParticles() {
+    pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+    if (particles.length > 0) {
+      let alive = [];
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.vy += 0.6; // 重力
+        p.rot += p.vrot;
+        if (p.y < pCanvas.height + 50) alive.push(p);
+        
+        pCtx.save();
+        pCtx.translate(p.x, p.y);
+        pCtx.rotate(p.rot);
+        pCtx.fillStyle = p.color;
+        pCtx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+        pCtx.restore();
+      });
+      particles = alive;
+    }
+    requestAnimationFrame(updateParticles);
+  }
+  updateParticles(); // ループ開始
 
   function generateProblem() {
     const a = Math.floor(Math.random() * 8) + 11;
-    let b = Math.floor(Math.random() * 8) + 1;
-    if(b >= (a - 10)) b = (a - 10) + 1 + Math.floor(Math.random()*2);
+    let b;
+    if (Math.random() > 0.5) {
+      const ones = a - 10;
+      b = Math.floor(Math.random() * (9 - ones)) + ones + 1;
+    } else {
+      const ones = a - 10;
+      b = Math.floor(Math.random() * ones) + 1;
+    }
     return { a, b, ones: a - 10 };
   }
 
-  function createBlocks(prob) {
-    blocks.forEach(b => { scene.remove(b.mesh); scene.remove(b.edges); });
-    blocks = [];
-
-    const cutFromTens = prob.b > prob.ones;
-    const boxGeo = new THREE.BoxGeometry(2.8, 1.4, 2.8); // 少し隙間を空けるサイズ
-    const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+  function loadStage() {
+    const playArea = document.getElementById('play-area');
+    const eqArea = document.getElementById('equation-area');
+    playArea.innerHTML = '';
     
-    // 配置のオフセット（進行方向に対して左と右に分ける）
-    const offsetTens = { x: -2.5, z: -2.5 }; // 左側
-    const offsetOnes = { x: 2.5, z: 2.5 };   // 右側
-
-    // 10の塊
-    for(let i=0; i<10; i++) {
-      const mesh = new THREE.Mesh(boxGeo, blockMat);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      const edges = new THREE.LineSegments(edgeGeo, edgeMat); // ★境界線を追加
-      mesh.add(edges);
-      
-      scene.add(mesh);
-      blocks.push({
-        mesh: mesh, group: 'tens', index: i,
-        isTarget: cutFromTens && i >= (10 - prob.b),
-        offsetX: offsetTens.x, offsetZ: offsetTens.z,
-        yBase: i * 1.5 + 0.75,
-        state: 'idle', v: new THREE.Vector3(), rv: new THREE.Vector3()
-      });
-    }
-
-    // 1のバラ
-    for(let i=0; i<prob.ones; i++) {
-      const mesh = new THREE.Mesh(boxGeo, blockMat);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      const edges = new THREE.LineSegments(edgeGeo, edgeMat);
-      mesh.add(edges);
-
-      scene.add(mesh);
-      blocks.push({
-        mesh: mesh, group: 'ones', index: i,
-        isTarget: !cutFromTens && i >= (prob.ones - prob.b),
-        offsetX: offsetOnes.x, offsetZ: offsetOnes.z,
-        yBase: i * 1.5 + 0.75,
-        state: 'idle', v: new THREE.Vector3(), rv: new THREE.Vector3()
-      });
-    }
-
-    document.getElementById('equation-board').innerHTML = `${prob.a} - <span class="highlight">${prob.b}</span> = ?`;
-  }
-
-  function loadNextStage() {
     currentProblem = generateProblem();
-    stageProgress = -40; // 画面左下手前（はるか後ろ）からリスタート
-    createBlocks(currentProblem);
-    updateBlockPositions();
-    gameState = 'running';
+    const cutFromTens = currentProblem.b > currentProblem.ones;
+
+    const tensGroup = document.createElement('div');
+    tensGroup.className = 'block-group';
+    tensGroup.innerHTML = `<div class="group-label">10</div>`;
+    
+    const tensRemain = document.createElement('div');
+    tensRemain.className = 'stack';
+    tensRemain.id = 'tens-remain';
+    
+    const tensCut = document.createElement('div');
+    tensCut.className = 'stack';
+    tensCut.id = 'tens-cut';
+    
+    if (cutFromTens) {
+      for(let i=0; i<10 - currentProblem.b; i++) tensRemain.innerHTML += `<div class="segment"></div>`;
+      for(let i=0; i<currentProblem.b; i++) tensCut.innerHTML += `<div class="segment sync-target"></div>`;
+      tensCut.dataset.correct = "true"; tensRemain.dataset.wrong = "true";
+    } else {
+      for(let i=0; i<10; i++) tensRemain.innerHTML += `<div class="segment"></div>`;
+      tensRemain.dataset.wrong = "true";
+    }
+    tensGroup.appendChild(tensRemain); tensGroup.appendChild(tensCut);
+
+    const onesGroup = document.createElement('div');
+    onesGroup.className = 'block-group';
+    onesGroup.innerHTML = `<div class="group-label">${currentProblem.ones}</div>`;
+    
+    const onesRemain = document.createElement('div');
+    onesRemain.className = 'stack';
+    onesRemain.id = 'ones-remain';
+    
+    const onesCut = document.createElement('div');
+    onesCut.className = 'stack';
+    onesCut.id = 'ones-cut';
+
+    if (!cutFromTens) {
+      for(let i=0; i<currentProblem.ones - currentProblem.b; i++) onesRemain.innerHTML += `<div class="segment"></div>`;
+      for(let i=0; i<currentProblem.b; i++) onesCut.innerHTML += `<div class="segment sync-target"></div>`;
+      onesCut.dataset.correct = "true"; onesRemain.dataset.wrong = "true";
+    } else {
+      for(let i=0; i<currentProblem.ones; i++) onesRemain.innerHTML += `<div class="segment"></div>`;
+      onesRemain.dataset.wrong = "true";
+    }
+    onesGroup.appendChild(onesRemain); onesGroup.appendChild(onesCut);
+
+    playArea.appendChild(tensGroup); playArea.appendChild(onesGroup);
+
+    eqArea.innerHTML = `${currentProblem.a} - <span class="sync-text">${currentProblem.b}</span> = <span id="answer">?</span>`;
+    eqArea.classList.remove('highlight-answer');
+    document.getElementById('stage-container').style.transform = 'translateZ(0px)';
   }
 
-  function updateBlockPositions() {
-    blocks.forEach(b => {
-      if (b.state === 'idle') {
-        // ★ XとZを同時に動かすことで、左手前から右奥への斜め移動を実現
-        b.mesh.position.set(
-          stageProgress + b.offsetX,
-          b.yBase,
-          -stageProgress + b.offsetZ
-        );
+  loadStage();
+  
+  setTimeout(() => {
+    const stage = document.getElementById('stage-container');
+    stage.style.transition = 'none';
+    stage.style.transform = 'translateZ(-3000px)';
+    stage.style.opacity = '0';
+    
+    setTimeout(() => {
+      stage.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease';
+      stage.style.transform = 'translateZ(0px)';
+      stage.style.opacity = '1';
+      setTimeout(() => { gameState = 'waiting_input'; }, 600);
+    }, 50);
+  }, 100);
+
+  function handleStart(e) {
+    if(gameState !== 'waiting_input') return;
+    e.preventDefault(); isDrawing = true;
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startY = e.touches ? e.touches[0].clientY : e.clientY;
+    currentX = startX; currentY = startY;
+  }
+
+  function handleMove(e) {
+    if (!isDrawing) return; e.preventDefault();
+    currentX = e.touches ? e.touches[0].clientX : e.clientX;
+    currentY = e.touches ? e.touches[0].clientY : e.clientY;
+    drawSwipeLine();
+  }
+
+  function handleEnd(e) {
+    if (!isDrawing) return; isDrawing = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    checkCollision();
+  }
+
+  function drawSwipeLine() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(currentX, currentY);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.shadowBlur = 12; ctx.shadowColor = '#00e5ff'; ctx.stroke();
+  }
+
+  function isIntersecting(el) {
+    if (!el || el.children.length === 0) return false;
+    const rect = el.getBoundingClientRect();
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+      const x = startX + (currentX - startX) * (i / steps);
+      const y = startY + (currentY - startY) * (i / steps);
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) return true;
+    }
+    return false;
+  }
+
+  function checkCollision() {
+    const distance = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+    if (distance < 30) return;
+
+    const correctTarget = document.querySelector('[data-correct="true"]');
+    const wrongTargets = document.querySelectorAll('[data-wrong="true"]');
+
+    if (isIntersecting(correctTarget)) {
+      executeSlice(correctTarget); return;
+    }
+    wrongTargets.forEach(target => {
+      if (isIntersecting(target)) {
+        playSound('error');
+        comboCount = 0; document.getElementById('combo').style.opacity = '0';
+        const segments = target.querySelectorAll('.segment');
+        segments.forEach(s => s.classList.add('error-shake'));
+        setTimeout(() => segments.forEach(s => s.classList.remove('error-shake')), 300);
       }
     });
   }
 
-  loadNextStage();
-
-  // --- 入力（タップでスライス） ---
-  window.addEventListener('pointerdown', () => {
-    if (gameState !== 'waiting_input') return;
-    executeSlice();
-  });
-
-  function executeSlice() {
+  function executeSlice(targetCut) {
     gameState = 'slicing';
     playSound('slice');
 
-    const targetBlock = blocks.find(b => b.isTarget);
-    if(!targetBlock) return;
-    
-    // 切断対象のY座標中心を狙う
-    const targetY = targetBlock.yBase;
-    const targetX = targetBlock.mesh.position.x;
-    const targetZ = targetBlock.mesh.position.z;
-    
-    let t = 0;
-    const startPos = knifeWaitPos.clone();
-    const endPos = new THREE.Vector3(targetX, targetY, targetZ);
-
-    function animateKnife() {
-      t += 0.1;
-      if (t <= 1) {
-        knifeGroup.position.lerpVectors(startPos, endPos, t);
-        knifeGroup.rotation.x -= 0.8; // ★ 進行方向に合わせて前転回転
-        requestAnimationFrame(animateKnife);
-      } else {
-        playSound('break');
-        shatterBlocks();
-      }
-    }
-    animateKnife();
-  }
-
-  function shatterBlocks() {
-    blocks.forEach(b => {
-      if (b.isTarget) {
-        b.state = 'shattered';
-        // 右奥へ散らばるようにベロシティを設定
-        b.v.set(
-          Math.random() * 0.3 + 0.2, // X: 右へ
-          Math.random() * 0.4 + 0.1, // Y: 上へ
-          -Math.random() * 0.3 - 0.2 // Z: 奥へ
-        );
-        b.rv.set(Math.random() * 0.2, Math.random() * 0.2, Math.random() * 0.2);
-      }
+    document.querySelectorAll('.group-label').forEach(l => l.style.opacity = '0');
+    document.querySelectorAll('.sync-target, .sync-text').forEach(el => {
+      el.classList.remove('sync-target', 'sync-text');
+      el.style.color = 'var(--text-color)'; el.style.textShadow = 'none';
     });
 
-    setTimeout(() => {
-      gameState = 'merging';
-      mergeBlocks();
-    }, 800); // 散らばるのを少し待つ
-  }
-
-  function mergeBlocks() {
-    const remainTens = blocks.filter(b => b.group === 'tens' && !b.isTarget);
-    const ones = blocks.filter(b => b.group === 'ones' && !b.isTarget);
-    
-    remainTens.forEach((b, i) => {
-      b.state = 'moving';
-      // 1のバラの積み上げ位置（右側）へ移動
-      b.targetPos = new THREE.Vector3(
-        stageProgress + b.offsetX + 5, // X軸を右側（Ones）に合わせる (2.5 - (-2.5) = 5)
-        (ones.length + i) * 1.5 + 0.75,
-        -stageProgress + b.offsetZ - 5 // Z軸も右側に合わせる
-      );
-    });
+    targetCut.style.transition = 'transform 0.15s ease-out';
+    const rotDir = Math.random() > 0.5 ? 1 : -1;
+    targetCut.style.transform = `translateY(-30px) scale(1.05) rotate(${5 * rotDir}deg)`;
 
     setTimeout(() => {
-      playSound('success');
-      score += 100;
-      document.getElementById('score').innerText = score;
-      document.getElementById('equation-board').innerHTML = `
-        ${currentProblem.a} - ${currentProblem.b} = <span class="answer-text">${currentProblem.a - currentProblem.b}</span>
-      `;
-      
-      gameState = 'finishing'; // 合体完了、画面右奥へ去っていく
-      
-      setTimeout(() => { loadNextStage(); }, 1200);
-    }, 600);
-  }
+      targetCut.style.transition = 'transform 0.6s cubic-bezier(0.5, 0, 1, 1)';
+      targetCut.style.transform = `translateY(1500px) scale(0.8) rotate(${30 * rotDir}deg)`;
+    }, 150);
 
-  // --- メインループ ---
-  function animate() {
-    requestAnimationFrame(animate);
+    const cutFromTens = currentProblem.b > currentProblem.ones;
 
-    // 床グリッドを斜めにスクロールさせて疾走感を演出
-    gridHelper.position.x += runSpeed;
-    gridHelper.position.z -= runSpeed;
-    if (gridHelper.position.x > 10) {
-      gridHelper.position.x %= 10;
-      gridHelper.position.z %= 10;
-    }
-
-    if (gameState === 'running') {
-      stageProgress += runSpeed;
-      updateBlockPositions();
-      
-      // 中心付近（0）でストップ
-      if (stageProgress >= 0) {
-        stageProgress = 0;
-        updateBlockPositions();
-        gameState = 'waiting_input';
+    setTimeout(() => {
+      if (cutFromTens) {
+        const tensRemain = document.getElementById('tens-remain');
+        const onesRemain = document.getElementById('ones-remain');
+        const rRect = tensRemain.getBoundingClientRect();
+        const oRect = onesRemain.getBoundingClientRect();
         
-        // ナイフを初期位置に戻す
-        knifeGroup.position.copy(knifeWaitPos);
-        knifeGroup.rotation.set(0, 0, Math.PI / 8); // ちょっと構えた角度
-      }
-    } else if (gameState === 'finishing') {
-      // クリア後、残ったブロックがさらに右奥へ進んで退場する
-      stageProgress += runSpeed * 1.5;
-      updateBlockPositions();
-      // ナイフも一緒に飛んでいく
-      knifeGroup.position.x += runSpeed;
-      knifeGroup.position.z -= runSpeed;
-    }
+        const moveX = oRect.left - rRect.left;
+        const moveY = oRect.top - rRect.bottom + 2;
 
-    // アニメーション更新
-    blocks.forEach(b => {
-      if (b.state === 'shattered') {
-        b.mesh.position.add(b.v);
-        b.v.y -= 0.02; // 重力
-        b.mesh.rotation.x += b.rv.x;
-        b.mesh.rotation.y += b.rv.y;
-      } else if (b.state === 'moving') {
-        b.mesh.position.lerp(b.targetPos, 0.15);
-        if (b.mesh.position.distanceTo(b.targetPos) < 0.1 && b.index === 0) {
-            playSound('stack'); 
-            b.state = 'idle'; // 音の重複防止
+        tensRemain.style.transition = 'transform 0.3s cubic-bezier(0.5, 0, 0.75, 0)';
+        tensRemain.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+        setTimeout(() => { playSound('stack'); promptAnswer(); }, 300);
+      } else {
+        const onesRemain = document.getElementById('ones-remain');
+        if (onesRemain && onesRemain.children.length > 0) {
+            const tensRemain = document.getElementById('tens-remain');
+            const groundRect = tensRemain.lastElementChild.getBoundingClientRect();
+            const targetRect = onesRemain.lastElementChild.getBoundingClientRect();
+            const moveY = groundRect.bottom - targetRect.bottom;
+
+            onesRemain.style.transition = 'transform 0.3s cubic-bezier(0.5, 0, 0.75, 0)';
+            onesRemain.style.transform = `translateY(${moveY}px)`;
+            
+            setTimeout(() => { playSound('stack'); promptAnswer(); }, 300);
+        } else {
+            promptAnswer();
         }
       }
-    });
-
-    renderer.render(scene, camera);
+    }, 450); 
   }
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  // ★ テンキー入力プロンプト
+  function promptAnswer() {
+    gameState = 'waiting_answer';
+    currentInput = "";
+    
+    // テンキーをスライドイン
+    document.getElementById('tenkey-container').classList.add('active');
+    
+    // ステージを少し上に避けて見やすくする
+    document.getElementById('stage-container').style.transform = 'translateY(-15vh) translateZ(0px)';
+    
+    const ansSpan = document.getElementById('answer');
+    ansSpan.innerText = '?';
+    ansSpan.style.color = 'var(--text-color)';
+  }
 
-  animate();
+  // ★ テンキー入力処理
+  function handleKey(e, val) {
+    if (gameState !== 'waiting_answer') return;
+    e.preventDefault(); e.stopPropagation();
+    
+    playSound('tap');
+    currentInput += val.toString();
+    
+    const eqArea = document.getElementById('equation-area');
+    const ansSpan = document.getElementById('answer');
+    ansSpan.innerText = currentInput;
+    ansSpan.style.color = '#00aaff'; // 入力中は青色
+
+    const targetAnswer = currentProblem.a - currentProblem.b;
+
+    if (parseInt(currentInput) === targetAnswer) {
+      // 正解処理
+      gameState = 'finishing';
+      
+      // テンキーを下げる＆ステージ位置戻す
+      document.getElementById('tenkey-container').classList.remove('active');
+      document.getElementById('stage-container').style.transform = 'translateY(0) translateZ(0px)';
+      
+      // 報酬アニメーション＆音
+      playSound('success');
+      spawnConfetti();
+
+      ansSpan.style.color = '#ff4d4d';
+      eqArea.classList.add('highlight-answer');
+      document.querySelectorAll('.stack').forEach(stack => {
+        if(stack.children.length > 0) stack.classList.add('highlight-answer');
+      });
+
+      comboCount++; score += 100 * comboCount;
+      document.getElementById('score-val').innerText = score;
+      if (comboCount > 1) {
+        const comboEl = document.getElementById('combo');
+        comboEl.innerText = `${comboCount} COMBO!`;
+        comboEl.style.opacity = '1';
+      }
+
+      // 喜びの余韻を持たせてから次へ
+      setTimeout(advanceToNextStage, 2200);
+
+    } else if (currentInput.length >= targetAnswer.toString().length) {
+      // 不正解処理（長さが到達したのに一致しない場合）
+      playSound('error');
+      comboCount = 0; document.getElementById('combo').style.opacity = '0';
+      
+      eqArea.classList.add('error-shake');
+      ansSpan.style.color = '#ff4d4d';
+      
+      // ブルッと震えた後に自動リセット（消去ボタン不要の直感設計）
+      setTimeout(() => {
+        eqArea.classList.remove('error-shake');
+        currentInput = "";
+        ansSpan.innerText = '?';
+        ansSpan.style.color = 'var(--text-color)';
+      }, 400);
+    }
+  }
+
+  function advanceToNextStage() {
+    const stage = document.getElementById('stage-container');
+    stage.style.transition = 'transform 0.5s ease-in, opacity 0.3s ease-in';
+    stage.style.transform = 'translateZ(800px)'; 
+    stage.style.opacity = '0';
+    
+    setTimeout(() => {
+      loadStage();
+      stage.style.transition = 'none';
+      stage.style.transform = 'translateZ(-3000px)'; 
+      
+      setTimeout(() => {
+        stage.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease';
+        stage.style.transform = 'translateZ(0px)';
+        stage.style.opacity = '1';
+        setTimeout(() => { gameState = 'waiting_input'; }, 600);
+      }, 50);
+
+    }, 500); 
+  }
 </script>
 </body>
 </html>
